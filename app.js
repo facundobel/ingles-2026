@@ -186,7 +186,6 @@ function renderReport() {
     `<h2>📈 Reporte del día</h2><p>Entrenaste <b>${today.gym || 0}</b> ejercicios, hiciste <b>${today.challenges || 0}</b> desafío/s y marcaste <b>${today.readings || 0}</b> lectura/s.</p><div class="kpi"><div class="box"><div class="num">${percent}%</div><div>precisión</div></div><div class="box"><div class="num">${today.wrong || 0}</div><div>errores</div></div></div><hr><h3>Venís firme en</h3>${strong.length ? strong.map(([t]) => `<div class="stat">✅ ${t}</div>`).join("") : "<p>Todavía falta entrenar para detectar fortalezas.</p>"}<h3>Está flojo</h3>${weak.length ? weak.map(([t, v]) => `<div class="stat">⚠️ ${t}: ${v.wrong} error/es</div>`).join("") : "<p>Nada grave registrado hoy. Buen domingo gramatical.</p>"}<h3>Recomendación</h3><p>${weak.length ? "Volvé al Gimnasio y metele una ronda corta a: " + weak.map(([t]) => t).join(", ") + "." : "Hacé un desafío de prompt o una lectura corta."}</p>`,
   );
 }
-();
 updateStreak();
 const initialTab = location.hash.replace("#", "") || "home";
 history.replaceState({ tab: initialTab }, "", "#" + initialTab);
