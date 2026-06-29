@@ -1,1 +1,193 @@
-const app=document.getElementById("app"),navButtons=document.querySelectorAll(".nav-item");const store={get:(k,f)=>JSON.parse(localStorage.getItem(k)||JSON.stringify(f)),set:(k,v)=>localStorage.setItem(k,JSON.stringify(v))};let currentQuiz=[],currentIndex=0,currentScore=0,currentMistakes=[];function setTab(tab){navButtons.forEach(b=>b.classList.toggle("active",b.dataset.tab===tab));if(tab==="home")renderHome();if(tab==="gym")renderGym();if(tab==="challenges")renderChallenges();if(tab==="archive")renderArchive();if(tab==="report")renderReport()}navButtons.forEach(btn=>btn.addEventListener("click",()=>setTab(btn.dataset.tab)));function todayKey(){return new Date().toISOString().slice(0,10)}function addTodayStat(type,payload={}){const stats=store.get("dailyStats",{}),key=todayKey();stats[key]||={gym:0,correct:0,wrong:0,challenges:0,readings:0,topics:{}};if(type==="gym"){stats[key].gym++;if(payload.correct)stats[key].correct++;else stats[key].wrong++;stats[key].topics[payload.topic]||={correct:0,wrong:0};if(payload.correct)stats[key].topics[payload.topic].correct++;else stats[key].topics[payload.topic].wrong++}if(type==="challenge")stats[key].challenges++;if(type==="reading")stats[key].readings++;store.set("dailyStats",stats);updateStreak()}function updateStreak(){const stats=store.get("dailyStats",{});document.getElementById("streakBox").textContent=Object.keys(stats).length+"🔥"}function card(html,cls=""){return `<section class="card ${cls}">${html}</section>`}function renderHome(){const stats=store.get("dailyStats",{}),today=stats[todayKey()]||{gym:0,readings:0};app.innerHTML=`${card(`<h2>Buen día, Fac.</h2><p>Entrenamiento corto, útil y al hueso. Nada de fundar Microsoft antes del segundo café.</p>`,"dark")}${card(`<h3>Hoy</h3><div class="kpi"><div class="box"><div class="num">${today.gym||0}</div><div>ejercicios</div></div><div class="box"><div class="num">${today.readings||0}</div><div>lecturas</div></div></div><button onclick="setTab('gym')">Ir al gimnasio</button><button class="secondary" onclick="setTab('challenges')">Hacer un desafío</button>`)}${card(`<h3>Idea central</h3><p>Hacés una tarea real. Si sale floja, vas al gimnasio. Entrenás el músculo exacto. Después volvés mejor.</p>`,"soft")}`}function shuffle(arr){return[...arr].sort(()=>Math.random()-.5)}function renderGym(){const topics=["Mixed",...new Set(GYM_EXERCISES.map(e=>e.topic))];app.innerHTML=card(`<h2>🏋 Gimnasio</h2><p class="small">Ejercicios rápidos para automatizar lo que vas aprendiendo.</p><label>Tema</label><select id="topicSelect">${topics.map(t=>`<option>${t}</option>`).join("")}</select><label>Cantidad</label><select id="amountSelect"><option>5</option><option selected>10</option><option>15</option></select><button onclick="startGym()">Empezar</button>`)}function startGym(){const topic=document.getElementById("topicSelect").value,amount=Number(document.getElementById("amountSelect").value);let pool=topic==="Mixed"?GYM_EXERCISES:GYM_EXERCISES.filter(e=>e.topic===topic);currentQuiz=shuffle(pool);while(currentQuiz.length<amount)currentQuiz=currentQuiz.concat(shuffle(pool));currentQuiz=currentQuiz.slice(0,amount);currentIndex=0;currentScore=0;currentMistakes=[];renderQuestion()}function renderQuestion(){const ex=currentQuiz[currentIndex];app.innerHTML=`<div class="row"><span class="pill">${ex.topic}</span><span>${currentIndex+1}/${currentQuiz.length}</span></div>${card(`<p class="small">Elegí la opción correcta.</p><h2>${ex.question}</h2><div class="grid">${ex.options.map(opt=>`<button class="option" onclick="answerGym('${opt.replace(/'/g,"\\'")}')">${opt}</button>`).join("")}</div>`)}`}function answerGym(selected){const ex=currentQuiz[currentIndex],correct=selected===ex.answer;addTodayStat("gym",{topic:ex.topic,correct});if(!correct)currentMistakes.push({topic:ex.topic,question:ex.question,selected,answer:ex.answer});if(correct)currentScore++;app.innerHTML=card(`<h2>${correct?"✅ Bien, guachín.":"❌ Incorrecto."}</h2><p>Vos pusiste: <b>${selected}</b></p><p>Correcta: <b>${ex.answer}</b></p><hr><p>${ex.explanation}</p><button onclick="nextGym()">Siguiente</button>`,correct?"feedback good":"feedback bad")}function nextGym(){currentIndex++;currentIndex>=currentQuiz.length?renderGymSummary():renderQuestion()}function renderGymSummary(){const percent=Math.round(currentScore/currentQuiz.length*100);app.innerHTML=card(`<h2>Resumen del gimnasio</h2><p>Resultado: <b>${currentScore}/${currentQuiz.length}</b> (${percent}%).</p>${currentMistakes.length?`<h3>Flojo para repasar</h3>${currentMistakes.map(m=>`<div class="mistake"><b>${m.topic}</b><br>${m.question}<br>Pusiste: ${m.selected}<br>Correcta: ${m.answer}</div>`).join("")}`:"<p>Sin errores. Hoy saliste con la musculatura gramatical aceitada.</p>"}<button onclick="renderGym()">Otra ronda</button><button class="secondary" onclick="setTab('report')">Ver reporte del día</button>`)}function renderChallenges(){app.innerHTML=`${card(`<h2>🎯 Desafíos</h2><p class="small">Acá practicás tareas reales. Por ahora: escribir prompts.</p>`)}${CHALLENGES.map(ch=>card(`<div class="row"><span class="pill">${ch.type}</span><span class="status">${ch.level}</span></div><h3>${ch.title}</h3><p>${ch.objective}</p><button onclick="openChallenge('${ch.id}')">Abrir</button>`)).join("")}`}function openChallenge(id){const ch=CHALLENGES.find(x=>x.id===id);app.innerHTML=card(`<span class="pill">${ch.level}</span><h2>${ch.title}</h2><p>${ch.prompt}</p><h3>Consejos</h3><ul>${ch.tips.map(t=>`<li>${t}</li>`).join("")}</ul><textarea id="challengeText" placeholder="Escribí acá tu respuesta en inglés..."></textarea><button onclick="saveChallenge('${ch.id}')">Guardar desafío</button><button class="secondary" onclick="renderChallenges()">Volver</button>`)}function saveChallenge(id){const text=document.getElementById("challengeText").value.trim();if(!text){alert("Escribí algo, guachín.");return}const saved=store.get("challenges",[]);saved.push({id,text,date:new Date().toISOString()});store.set("challenges",saved);addTodayStat("challenge");app.innerHTML=card(`<h2>Desafío guardado</h2><p>No lo corrijo todavía con IA. Por ahora queda registrado para la próxima etapa.</p><p class="small">Más adelante esto va a disparar diagnóstico y gimnasio recomendado.</p><button onclick="setTab('report')">Ver reporte</button><button class="secondary" onclick="renderChallenges()">Otro desafío</button>`)}function renderArchive(){const read=store.get("readItems",{});app.innerHTML=`${card(`<h2>📚 Archivo</h2><p class="small">Textos cortos para leer. Sin examen. Leer también cuenta.</p>`)}${ARCHIVE.map(item=>card(`<div class="row"><span class="pill">${item.type}</span><span class="status">${read[item.id]?"✅ Leído":"🕓 Pendiente"}</span></div><h3>${item.title}</h3><p class="small">Nivel ${item.level}</p><button onclick="openReading('${item.id}')">Leer</button>`)).join("")}`}function openReading(id){const item=ARCHIVE.find(x=>x.id===id);app.innerHTML=card(`<span class="pill">${item.level}</span><h2>${item.title}</h2><p class="reading">${item.text}</p><button onclick="markRead('${item.id}')">Marcar como leído</button><button class="secondary" onclick="renderArchive()">Volver</button>`)}function markRead(id){const read=store.get("readItems",{});if(!read[id])addTodayStat("reading");read[id]=true;store.set("readItems",read);renderArchive()}function renderReport(){const stats=store.get("dailyStats",{}),today=stats[todayKey()]||{gym:0,correct:0,wrong:0,challenges:0,readings:0,topics:{}};const total=(today.correct||0)+(today.wrong||0),percent=total?Math.round(today.correct/total*100):0;const weak=Object.entries(today.topics||{}).filter(([_,v])=>v.wrong>0).sort((a,b)=>b[1].wrong-a[1].wrong);const strong=Object.entries(today.topics||{}).filter(([_,v])=>v.correct>0&&v.wrong===0).slice(0,3);app.innerHTML=card(`<h2>📈 Reporte del día</h2><p>Entrenaste <b>${today.gym||0}</b> ejercicios, hiciste <b>${today.challenges||0}</b> desafío/s y marcaste <b>${today.readings||0}</b> lectura/s.</p><div class="kpi"><div class="box"><div class="num">${percent}%</div><div>precisión</div></div><div class="box"><div class="num">${today.wrong||0}</div><div>errores</div></div></div><hr><h3>Venís firme en</h3>${strong.length?strong.map(([t])=>`<div class="stat">✅ ${t}</div>`).join(""):"<p>Todavía falta entrenar para detectar fortalezas.</p>"}<h3>Está flojo</h3>${weak.length?weak.map(([t,v])=>`<div class="stat">⚠️ ${t}: ${v.wrong} error/es</div>`).join(""):"<p>Nada grave registrado hoy. Buen domingo gramatical.</p>"}<h3>Recomendación</h3><p>${weak.length?"Volvé al Gimnasio y metele una ronda corta a: "+weak.map(([t])=>t).join(", ")+".":"Hacé un desafío de prompt o una lectura corta."}</p>`)}updateStreak();setTab("home");
+const app = document.getElementById("app"),
+  navButtons = document.querySelectorAll(".nav-item");
+const store = {
+  get: (k, f) => JSON.parse(localStorage.getItem(k) || JSON.stringify(f)),
+  set: (k, v) => localStorage.setItem(k, JSON.stringify(v)),
+};
+let currentQuiz = [],
+  currentIndex = 0,
+  currentScore = 0,
+  currentMistakes = [];
+function setTab(tab, saveHistory = true) {
+  navButtons.forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+
+  if (saveHistory) {
+    history.pushState({ tab }, "", "#" + tab);
+  }
+
+  if (tab === "home") renderHome();
+  if (tab === "gym") renderGym();
+  if (tab === "challenges") renderChallenges();
+  if (tab === "archive") renderArchive();
+  if (tab === "report") renderReport();
+}
+navButtons.forEach((btn) =>
+  btn.addEventListener("click", () => setTab(btn.dataset.tab)),
+);
+window.addEventListener("popstate", (e) => {
+  const tab = e.state?.tab || location.hash.replace("#", "") || "home";
+  setTab(tab, false);
+});
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+function addTodayStat(type, payload = {}) {
+  const stats = store.get("dailyStats", {}),
+    key = todayKey();
+  stats[key] ||= {
+    gym: 0,
+    correct: 0,
+    wrong: 0,
+    challenges: 0,
+    readings: 0,
+    topics: {},
+  };
+  if (type === "gym") {
+    stats[key].gym++;
+    if (payload.correct) stats[key].correct++;
+    else stats[key].wrong++;
+    stats[key].topics[payload.topic] ||= { correct: 0, wrong: 0 };
+    if (payload.correct) stats[key].topics[payload.topic].correct++;
+    else stats[key].topics[payload.topic].wrong++;
+  }
+  if (type === "challenge") stats[key].challenges++;
+  if (type === "reading") stats[key].readings++;
+  store.set("dailyStats", stats);
+  updateStreak();
+}
+function updateStreak() {
+  const stats = store.get("dailyStats", {});
+  document.getElementById("streakBox").textContent =
+    Object.keys(stats).length + "🔥";
+}
+function card(html, cls = "") {
+  return `<section class="card ${cls}">${html}</section>`;
+}
+function renderHome() {
+  const stats = store.get("dailyStats", {}),
+    today = stats[todayKey()] || { gym: 0, readings: 0 };
+  app.innerHTML = `${card(`<h2>Buen día, Fac.</h2><p>Entrenamiento corto, útil y al hueso. Nada de fundar Microsoft antes del segundo café.</p>`, "dark")}${card(`<h3>Hoy</h3><div class="kpi"><div class="box"><div class="num">${today.gym || 0}</div><div>ejercicios</div></div><div class="box"><div class="num">${today.readings || 0}</div><div>lecturas</div></div></div><button onclick="setTab('gym')">Ir al gimnasio</button><button class="secondary" onclick="setTab('challenges')">Hacer un desafío</button>`)}${card(`<h3>Idea central</h3><p>Hacés una tarea real. Si sale floja, vas al gimnasio. Entrenás el músculo exacto. Después volvés mejor.</p>`, "soft")}`;
+}
+function shuffle(arr) {
+  return [...arr].sort(() => Math.random() - 0.5);
+}
+function renderGym() {
+  const topics = ["Mixed", ...new Set(GYM_EXERCISES.map((e) => e.topic))];
+  app.innerHTML = card(
+    `<h2>🏋 Gimnasio</h2><p class="small">Ejercicios rápidos para automatizar lo que vas aprendiendo.</p><label>Tema</label><select id="topicSelect">${topics.map((t) => `<option>${t}</option>`).join("")}</select><label>Cantidad</label><select id="amountSelect"><option>5</option><option selected>10</option><option>15</option></select><button onclick="startGym()">Empezar</button>`,
+  );
+}
+function startGym() {
+  const topic = document.getElementById("topicSelect").value,
+    amount = Number(document.getElementById("amountSelect").value);
+  let pool =
+    topic === "Mixed"
+      ? GYM_EXERCISES
+      : GYM_EXERCISES.filter((e) => e.topic === topic);
+  currentQuiz = shuffle(pool);
+  while (currentQuiz.length < amount)
+    currentQuiz = currentQuiz.concat(shuffle(pool));
+  currentQuiz = currentQuiz.slice(0, amount);
+  currentIndex = 0;
+  currentScore = 0;
+  currentMistakes = [];
+  renderQuestion();
+}
+function renderQuestion() {
+  const ex = currentQuiz[currentIndex];
+  app.innerHTML = `<div class="row"><span class="pill">${ex.topic}</span><span>${currentIndex + 1}/${currentQuiz.length}</span></div>${card(`<p class="small">Elegí la opción correcta.</p><h2>${ex.question}</h2><div class="grid">${ex.options.map((opt) => `<button class="option" onclick="answerGym('${opt.replace(/'/g, "\\'")}')">${opt}</button>`).join("")}</div>`)}`;
+}
+function answerGym(selected) {
+  const ex = currentQuiz[currentIndex],
+    correct = selected === ex.answer;
+  addTodayStat("gym", { topic: ex.topic, correct });
+  if (!correct)
+    currentMistakes.push({
+      topic: ex.topic,
+      question: ex.question,
+      selected,
+      answer: ex.answer,
+    });
+  if (correct) currentScore++;
+  app.innerHTML = card(
+    `<h2>${correct ? "✅ Bien, guachín." : "❌ Incorrecto."}</h2><p>Vos pusiste: <b>${selected}</b></p><p>Correcta: <b>${ex.answer}</b></p><hr><p>${ex.explanation}</p><button onclick="nextGym()">Siguiente</button>`,
+    correct ? "feedback good" : "feedback bad",
+  );
+}
+function nextGym() {
+  currentIndex++;
+  currentIndex >= currentQuiz.length ? renderGymSummary() : renderQuestion();
+}
+function renderGymSummary() {
+  const percent = Math.round((currentScore / currentQuiz.length) * 100);
+  app.innerHTML = card(
+    `<h2>Resumen del gimnasio</h2><p>Resultado: <b>${currentScore}/${currentQuiz.length}</b> (${percent}%).</p>${currentMistakes.length ? `<h3>Flojo para repasar</h3>${currentMistakes.map((m) => `<div class="mistake"><b>${m.topic}</b><br>${m.question}<br>Pusiste: ${m.selected}<br>Correcta: ${m.answer}</div>`).join("")}` : "<p>Sin errores. Hoy saliste con la musculatura gramatical aceitada.</p>"}<button onclick="renderGym()">Otra ronda</button><button class="secondary" onclick="setTab('report')">Ver reporte del día</button>`,
+  );
+}
+function renderChallenges() {
+  app.innerHTML = `${card(`<h2>🎯 Desafíos</h2><p class="small">Acá practicás tareas reales. Por ahora: escribir prompts.</p>`)}${CHALLENGES.map((ch) => card(`<div class="row"><span class="pill">${ch.type}</span><span class="status">${ch.level}</span></div><h3>${ch.title}</h3><p>${ch.objective}</p><button onclick="openChallenge('${ch.id}')">Abrir</button>`)).join("")}`;
+}
+function openChallenge(id) {
+  const ch = CHALLENGES.find((x) => x.id === id);
+  app.innerHTML = card(
+    `<span class="pill">${ch.level}</span><h2>${ch.title}</h2><p>${ch.prompt}</p><h3>Consejos</h3><ul>${ch.tips.map((t) => `<li>${t}</li>`).join("")}</ul><textarea id="challengeText" placeholder="Escribí acá tu respuesta en inglés..."></textarea><button onclick="saveChallenge('${ch.id}')">Guardar desafío</button><button class="secondary" onclick="renderChallenges()">Volver</button>`,
+  );
+}
+function saveChallenge(id) {
+  const text = document.getElementById("challengeText").value.trim();
+  if (!text) {
+    alert("Escribí algo, guachín.");
+    return;
+  }
+  const saved = store.get("challenges", []);
+  saved.push({ id, text, date: new Date().toISOString() });
+  store.set("challenges", saved);
+  addTodayStat("challenge");
+  app.innerHTML = card(
+    `<h2>Desafío guardado</h2><p>No lo corrijo todavía con IA. Por ahora queda registrado para la próxima etapa.</p><p class="small">Más adelante esto va a disparar diagnóstico y gimnasio recomendado.</p><button onclick="setTab('report')">Ver reporte</button><button class="secondary" onclick="renderChallenges()">Otro desafío</button>`,
+  );
+}
+function renderArchive() {
+  const read = store.get("readItems", {});
+  app.innerHTML = `${card(`<h2>📚 Archivo</h2><p class="small">Textos cortos para leer. Sin examen. Leer también cuenta.</p>`)}${ARCHIVE.map((item) => card(`<div class="row"><span class="pill">${item.type}</span><span class="status">${read[item.id] ? "✅ Leído" : "🕓 Pendiente"}</span></div><h3>${item.title}</h3><p class="small">Nivel ${item.level}</p><button onclick="openReading('${item.id}')">Leer</button>`)).join("")}`;
+}
+function openReading(id) {
+  const item = ARCHIVE.find((x) => x.id === id);
+  app.innerHTML = card(
+    `<span class="pill">${item.level}</span><h2>${item.title}</h2><p class="reading">${item.text}</p><button onclick="markRead('${item.id}')">Marcar como leído</button><button class="secondary" onclick="renderArchive()">Volver</button>`,
+  );
+}
+function markRead(id) {
+  const read = store.get("readItems", {});
+  if (!read[id]) addTodayStat("reading");
+  read[id] = true;
+  store.set("readItems", read);
+  renderArchive();
+}
+function renderReport() {
+  const stats = store.get("dailyStats", {}),
+    today = stats[todayKey()] || {
+      gym: 0,
+      correct: 0,
+      wrong: 0,
+      challenges: 0,
+      readings: 0,
+      topics: {},
+    };
+  const total = (today.correct || 0) + (today.wrong || 0),
+    percent = total ? Math.round((today.correct / total) * 100) : 0;
+  const weak = Object.entries(today.topics || {})
+    .filter(([_, v]) => v.wrong > 0)
+    .sort((a, b) => b[1].wrong - a[1].wrong);
+  const strong = Object.entries(today.topics || {})
+    .filter(([_, v]) => v.correct > 0 && v.wrong === 0)
+    .slice(0, 3);
+  app.innerHTML = card(
+    `<h2>📈 Reporte del día</h2><p>Entrenaste <b>${today.gym || 0}</b> ejercicios, hiciste <b>${today.challenges || 0}</b> desafío/s y marcaste <b>${today.readings || 0}</b> lectura/s.</p><div class="kpi"><div class="box"><div class="num">${percent}%</div><div>precisión</div></div><div class="box"><div class="num">${today.wrong || 0}</div><div>errores</div></div></div><hr><h3>Venís firme en</h3>${strong.length ? strong.map(([t]) => `<div class="stat">✅ ${t}</div>`).join("") : "<p>Todavía falta entrenar para detectar fortalezas.</p>"}<h3>Está flojo</h3>${weak.length ? weak.map(([t, v]) => `<div class="stat">⚠️ ${t}: ${v.wrong} error/es</div>`).join("") : "<p>Nada grave registrado hoy. Buen domingo gramatical.</p>"}<h3>Recomendación</h3><p>${weak.length ? "Volvé al Gimnasio y metele una ronda corta a: " + weak.map(([t]) => t).join(", ") + "." : "Hacé un desafío de prompt o una lectura corta."}</p>`,
+  );
+}
+();
+updateStreak();
+const initialTab = location.hash.replace("#", "") || "home";
+history.replaceState({ tab: initialTab }, "", "#" + initialTab);
+setTab(initialTab, false);
